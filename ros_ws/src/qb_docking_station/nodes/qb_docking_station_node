@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+from __future__ import print_function
+
+import rospy
+import qb_docking_station
+
+if __name__ == '__main__':
+    try:
+        qb_docking_station.start_manager()
+    except rospy.ROSInterruptException:
+        pass

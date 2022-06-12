@@ -1,0 +1,8 @@
+#goal definition
+uint8 command
+---
+#result definition
+uint8 connection
+---
+#feedback
+uint8 status
