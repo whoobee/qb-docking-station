@@ -47,7 +47,13 @@ catkin_make
 
 #install dynamixel library
 ##########################
-sudo pip3 install dynamixel-sdk
+pip3 install dynamixel-sdk
+
+#install GPIO control
+#####################
+pip3 install RPi.GPIO
+sudo apt install rpi.gpio-common
+sudo adduser "${USER}" dialout
 
 #install i2c tools
 ##################

@@ -1,3 +1,9 @@
+#goal constants
+uint8 ST_EXTEND_CONENCTOR=1
+uint8 ST_RETRACT_CONNECTOR=2
+uint8 ST_ENGAGE_POWER=3
+uint8 ST_DISENGAGE_POWER=4
+
 #goal definition
 uint8 command
 ---
