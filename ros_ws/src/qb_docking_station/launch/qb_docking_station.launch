@@ -1,21 +1,30 @@
 <!-- -*- mode: XML -*- -->
 <launch>
-    <arg name="qb_doking_dxl_id"            default="1"/>
-    <arg name="qb_doking_dxl_serial"        default="/dev/ttyUSB0"/>
-    <arg name="qb_doking_dxl_baud"          default="57600"/>
-    <arg name="qb_doking_dxl_pwm_treshold"  default="800"/>
-    <arg name="qb_doking_dxl_load_treshold" default="520"/>
-    <arg name="qb_doking_verbose"           default="False"/>
-    <arg name="output"                      default="screen"/>
+    <arg name="qb_doking_dxl_id"                  default="1"/>
+    <arg name="qb_doking_dxl_serial"              default="/dev/ttyUSB0"/>
+    <arg name="qb_doking_dxl_baud"                default="57600"/>
+    <arg name="qb_doking_dxl_pwm_treshold"        default="400"/>
+    <arg name="qb_doking_dxl_load_treshold"       default="200"/>
+    <arg name="qb_doking_enable_statistics"       default="True"/>
+    <arg name="qb_doking_carbon_srv_url"          default="localhost"/>
+    <arg name="qb_doking_carbon_srv_port"         default="2003"/>
+    <arg name="qb_doking_dxl_default_direction"   default="0"/>
+    <arg name="qb_doking_verbose"                 default="True"/>
+    <arg name="output"                            default="screen"/>
 
+    <!-- Start the qb docking station node -->
     <node pkg="qb_docking_station" type="qb_docking_station_node.py" name="qb_docking_station" ns="qb_docking_station_mngr" 
             output="$(arg output)">
-        <param name="qb_doking_dxl_id"              value="$(arg qb_doking_dxl_id)"/>
-        <param name="qb_doking_dxl_serial"          value="$(arg qb_doking_dxl_serial)"/>
-        <param name="qb_doking_dxl_baud"            value="$(arg qb_doking_dxl_baud)"/>
-        <param name="qb_doking_dxl_pwm_treshold"    value="$(arg qb_doking_dxl_pwm_treshold)"/>
-        <param name="qb_doking_dxl_load_treshold"   value="$(arg qb_doking_dxl_load_treshold)"/>
-        <param name="qb_doking_verbose"             value="$(arg qb_doking_verbose)"/>
+        <param name="qb_doking_dxl_id"                 value="$(arg qb_doking_dxl_id)"/>
+        <param name="qb_doking_dxl_serial"             value="$(arg qb_doking_dxl_serial)"/>
+        <param name="qb_doking_dxl_baud"               value="$(arg qb_doking_dxl_baud)"/>
+        <param name="qb_doking_dxl_pwm_treshold"       value="$(arg qb_doking_dxl_pwm_treshold)"/>
+        <param name="qb_doking_dxl_load_treshold"      value="$(arg qb_doking_dxl_load_treshold)"/>
+        <param name="qb_doking_enable_statistics"      value="$(arg qb_doking_enable_statistics)"/>
+        <param name="qb_doking_carbon_srv_url"         value="$(arg qb_doking_carbon_srv_url)"/>
+        <param name="qb_doking_carbon_srv_port"        value="$(arg qb_doking_carbon_srv_port)"/>
+        <param name="qb_doking_dxl_default_direction"  value="$(arg qb_doking_dxl_default_direction)"/>
+        <param name="qb_doking_verbose"                value="$(arg qb_doking_verbose)"/>
     </node>
 
 </launch>

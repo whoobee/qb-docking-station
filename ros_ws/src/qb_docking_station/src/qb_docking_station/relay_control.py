@@ -13,6 +13,7 @@ class RelayController(object):
     def __init__(self, _gpio):
         # Configure the GPIO for relay control
         self.RELAY_GPIO = _gpio
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.RELAY_GPIO,GPIO.OUT)
 

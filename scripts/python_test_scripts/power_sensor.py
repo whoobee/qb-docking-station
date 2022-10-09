@@ -12,7 +12,7 @@ class PowerSensor(object):
 
     # Define reg values
     CONFIG_REG     = 0x00
-    SHUNTVOLT_REG  = 0x01  
+    SHUNTVOLT_REG  = 0x01
     BUSVOLT_REG    = 0x02
     POWER_REG      = 0x03
     CURRENT_REG    = 0x04

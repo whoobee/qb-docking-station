@@ -59,6 +59,7 @@ class QbDockingStation(object):
     ST_SUCCESS              = 5
     ST_FAILURE              = 6
     ST_ERROR                = 7
+    ST_REBOOT               = 8
     docking_station_state = ST_INIT
 
     # Motor Controller handler
@@ -81,6 +82,7 @@ class QbDockingStation(object):
         self.qb_doking_dxl_baud = get_param('~qb_doking_dxl_baud', 57600)
         self.qb_doking_dxl_pwm_treshold = get_param('~qb_doking_dxl_pwm_treshold', 800)
         self.qb_doking_dxl_load_treshold = get_param('~qb_doking_dxl_load_treshold', 520)
+        self.qb_doking_dxl_default_direction = get_param('~qb_doking_dxl_default_direction', 0)
         self.qb_doking_verbose = get_param('~qb_doking_verbose', False)
         # Server feedback/result definition
         self.qb_docking_station_server_feedback = QbDockingStationFeedback()
@@ -96,6 +98,7 @@ class QbDockingStation(object):
                                                 self.qb_doking_dxl_baud,
                                                 self.qb_doking_dxl_pwm_treshold,
                                                 self.qb_doking_dxl_load_treshold,
+                                                self.qb_doking_dxl_default_direction,
                                                 self.qb_doking_verbose)
         # Create/init power sensor class
         self.power_sensor = PowerSensor()
@@ -107,7 +110,79 @@ class QbDockingStation(object):
     def qb_docking_station_server_hndl(self, goal):
         self.docking_station_state = goal.command
         print("Goal set to - %d " %  self.docking_station_state)
-        #self.qb_docking_station_server.set_succeeded(self.qb_docking_station_server_result)
+        while self.docking_station_state != self.ST_INIT:
+            # no goal received
+            if(self.docking_station_state == self.ST_INIT):
+                pass
+            # goal received to extend connector to the robot
+            elif(self.docking_station_state == self.ST_EXTEND_CONENCTOR):
+                __result = self.motor_controller.dock_connector()
+                if(__result == self.motor_controller.ST_DOC_CONNECTED):
+                    # connection extablished
+                    self.docking_station_state = self.ST_SUCCESS
+                elif (__result == self.motor_controller.ST_DOC_FAILURE or __result == self.motor_controller.ST_DOC_ERROR):
+                    # connection error
+                    self.docking_station_state = self.ST_FAILURE
+                else:
+                    # in progress
+                    self.qb_docking_station_server_feedback.status = __result
+                    self.qb_docking_station_server.publish_feedback(self.qb_docking_station_server_feedback)
+                    self.docking_station_state = self.ST_EXTEND_CONENCTOR
+
+            # goal received to retract connector from the robot
+            elif(self.docking_station_state == self.ST_RETRACT_CONNECTOR):
+                __result = self.motor_controller.undock_connector()
+                if(__result == self.motor_controller.ST_UNDOC_DISCONNECTED):
+                    # connector disengaged
+                    self.docking_station_state = self.ST_SUCCESS
+                    print("success")
+                elif (__result == self.motor_controller.ST_UNDOC_FAILURE or __result == self.motor_controller.ST_UNDOC_ERROR):
+                    # connector still engaged
+                    self.docking_station_state = self.ST_FAILURE
+                    print("failure")
+                else:
+                    # in progress
+                    self.qb_docking_station_server_feedback.status = __result
+                    self.qb_docking_station_server.publish_feedback(self.qb_docking_station_server_feedback)
+                    self.docking_station_state = self.ST_RETRACT_CONNECTOR
+                    print("in progress: (%d)" % (__result))
+
+            # goal received to energise the power connector
+            elif(self.docking_station_state == self.ST_ENGAGE_POWER):
+                self.relay_controller.engage_relay()
+                self.docking_station_state =  self.ST_SUCCESS
+
+            # goal received to disengage the power connector
+            elif(self.docking_station_state == self.ST_DISENGAGE_POWER):
+                self.relay_controller.disengage_relay()
+                self.docking_station_state =  self.ST_SUCCESS
+
+            # goal successfuly executed
+            elif(self.docking_station_state == self.ST_SUCCESS):
+                # reset the state machine
+                self.qb_docking_station_server.set_succeeded(self.qb_docking_station_server_result)
+                self.docking_station_state =  self.ST_INIT
+
+            # goal cannoe be successuly reached
+            elif(self.docking_station_state == self.ST_FAILURE):
+                # reset the state machine
+                self.qb_docking_station_server.set_aborted(self.qb_docking_station_server_result)
+                self.docking_station_state =  self.ST_INIT
+
+            # handling error
+            elif(self.docking_station_state == self.ST_ERROR):
+                self.qb_docking_station_server.set_aborted(self.qb_docking_station_server_result)
+                self.docking_station_state = self.ST_INIT
+
+            # handle reset
+            elif(self.docking_station_state == self.ST_REBOOT):
+                self.motor_controller.reboot()
+                self.docking_station_state =  self.ST_SUCCESS
+
+            # unknown state
+            else:
+                self.docking_station_state = self.ST_ERROR
+            time.sleep(0.1)
 
     # Docking Station Deinitialization 
     def deinit(self):
@@ -123,73 +198,14 @@ class QbDockingStation(object):
         # while a ROS timer will handle the high-rate (~50Hz) comms + odometry calcs
         self.main_rate = rospy.Rate(10) # hz
         # Start timer to run high-rate comms
-        self.fast_timer = rospy.Timer(rospy.Duration(1/float(self.qb_docking_station_calc_hz)), self.fast_timer)
+        # self.fast_timer = rospy.Timer(rospy.Duration(1/float(self.qb_docking_station_calc_hz)), self.fast_timer)
 
 
     # Timer setup for main loop cyclic exec
     def fast_timer(self, timer_event):
         # calculate timestamp and publish
         time_now = rospy.Time.now()
-        # no goal received
-        if(self.docking_station_state == self.ST_INIT):
-            pass
-        # goal received to extend connector to the robot
-        elif(self.docking_station_state == self.ST_EXTEND_CONENCTOR):
-            __result = self.motor_controller.dock_connector()
-            if(__result == self.motor_controller.ST_DOC_CONNECTED):
-                # connection extablished
-                self.docking_station_state = self.ST_SUCCESS
-            elif (__result == self.motor_controller.ST_DOC_FAILURE or __result == self.motor_controller.ST_DOC_ERROR):
-                # connection error
-                self.docking_station_state = self.ST_FAILURE
-            else:
-                # in progress
-                self.qb_docking_station_server_feedback.status = __result
-                self.qb_docking_station_server.publish_feedback(self.qb_docking_station_server_feedback)
-                self.docking_station_state = self.ST_EXTEND_CONENCTOR
-
-        # goal received to retract connector from the robot
-        elif(self.docking_station_state == self.ST_RETRACT_CONNECTOR):
-            __result = self.motor_controller.undock_connector()
-            if(__result == self.motor_controller.ST_UNDOC_DISCONNECTED):
-                # connector disengaged
-                self.docking_station_state = self.ST_SUCCESS
-            elif (__result == self.motor_controller.ST_UNDOC_FAILURE or __result == self.motor_controller.ST_UNDOC_ERROR):
-                # connector still engaged
-                self.docking_station_state = self.ST_FAILURE
-            else:
-                # in progress
-                self.qb_docking_station_server_feedback.status = __result
-                self.qb_docking_station_server.publish_feedback(self.qb_docking_station_server_feedback)
-                self.docking_station_state = self.ST_RETRACT_CONNECTOR
-
-        # goal received to energise the power connector
-        elif(self.docking_station_state == self.ST_ENGAGE_POWER):
-            self.relay_controller.engage_relay()
-
-        # goal received to disengage the power connector
-        elif(self.docking_station_state == self.ST_DISENGAGE_POWER):
-            self.relay_controller.disengage_relay()
-
-        # goal successfuly executed
-        elif(self.docking_station_state == self.ST_SUCCESS):
-            # reset the state machine
-            self.qb_docking_station_server.set_succeeded(self.qb_docking_station_server_result)
-            self.docking_station_state =  self.ST_INIT
-
-        # goal cannoe be successuly reached
-        elif(self.docking_station_state == self.ST_FAILURE):
-            # reset the state machine
-            self.qb_docking_station_server.set_aborted(self.qb_docking_station_server_result)
-            self.docking_station_state =  self.ST_INIT
-
-        # handling error
-        elif(self.docking_station_state == self.ST_ERROR):
-            self.qb_docking_station_server.set_aborted(self.qb_docking_station_server_result)
-
-        # unknown state
-        else:
-            self.docking_station_state = self.ST_ERROR
+        pass
 
 
     def terminate(self):

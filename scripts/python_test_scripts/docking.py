@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import os
 import time
+
+# Dynamixel APIs
 from dynamixel_sdk import * # Uses Dynamixel SDK library
 
+# Power Seonsor APIs
 from power_sensor import PowerSensor
 
 # QbDockingStation class
@@ -14,7 +17,7 @@ class QbDockingStation(object):
     # Control table address
     ADDR_MODE                   = 11
     ADDR_SHUTDOWN_REASON        = 63
-    ADDR_TORQUE_ENABLE          = 64
+    ADDR_TORQUE                 = 64
     ADDR_LED                    = 65
     ADDR_GOAL_POSITION          = 116
     ADDR_GOAL_PWM               = 100
@@ -35,6 +38,9 @@ class QbDockingStation(object):
     # ex) Windows: "COM*", Linux: "/dev/ttyUSB*", Mac: "/dev/tty.usbserial-*"
     DEVICENAME                  = '/dev/ttyUSB0'
 
+    # Verbose switch
+    VERBOSE                     = False
+
     EXT_POS_CONTROL             = 4     # Value for Extended Position Control Mode of the Operation Mode Register
     PWM_CONTROL                 = 16    # Value for PWM Control Mode of the Operation Mode Register
     LED_ENABLE                  = 1     # Value for enabling the LED
@@ -50,6 +56,7 @@ class QbDockingStation(object):
     # Direction params
     DIR_NORMAL                  = 0
     DIR_REVERSE                 = 1
+    DIR_SETTING                 = DIR_NORMAL
 
     # Minimum encoder position
     CAL_MIN_BOUNDREY            = 0
@@ -79,7 +86,7 @@ class QbDockingStation(object):
     ST_DOC_ERROR                = 6
     docking_state = ST_DOC_INIT
 
-    # Docking State Definition
+    # Undocking State Definition
     ST_UNDOC_INIT                 = 0
     ST_UNDOC_MOVE                 = 1
     ST_UNDOC_CHECK_CONNECTION     = 2
@@ -105,56 +112,30 @@ class QbDockingStation(object):
 
         # Open port
         if self.portHandler.openPort():
-            print("Succeeded to open the port")
+            if(self.VERBOSE): print("[INFO][GEN] - Succeeded to open the port")
         else:
-            print("Failed to open the port")
+            print("[ERROR][GEN] - Failed to open the port")
 
         # Set port baudrate
         if self.portHandler.setBaudRate(self.BAUDRATE):
-            print("Succeeded to change the baudrate")
+            if(self.VERBOSE): print("[INFO][GEN] - Succeeded to change the baudrate")
         else:
-            print("Failed to change the baudrate")
+            print("[ERROR][GEN] - Failed to change the baudrate")
 
-        # Reboot Dynamixel to clear all errors
-        #dxl_comm_result, dxl_error = self.packetHandler.reboot(self.portHandler, self.DXL_ID)
-        #if dxl_comm_result != COMM_SUCCESS:
-        #    print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        #elif dxl_error != 0:
-        #    print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
+        # Reset the Dynamixel to clear any HW errors
+        self.reboot()
+        # Set Dynamixel direction
+        self.set_direction(self.DIR_SETTING)
 
-        # Set Dynamixel Control Mode to Extended Position Control Mode
-        #dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_MODE, self.EXT_POS_CONTROL)
-        #if dxl_comm_result != COMM_SUCCESS:
-        #    print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        #elif dxl_error != 0:
-        #    print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
-        #else:
-        #    print("Dynamixel has been successfully connected")
+        if(self.VERBOSE): print("[INFO][GEN] Dynamixel has been successfully connected")
         
-        
-
-        # Enable Dynamixel LED
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_LED, self.LED_ENABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
-
-        # Enable Dynamixel Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_ENABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
-
-        print("[INFO][GEN] Dynamixel has been successfully connected")
-
         # Create/init power sensor class
-        #self.power_sensor = PowerSensor()
+        self.power_sensor = PowerSensor()
+        
 
     def disable(self):
         # Disable Dynamixel Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_DISABLE)
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE, self.TORQUE_DISABLE)
         if dxl_comm_result != COMM_SUCCESS:
             print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
         elif dxl_error != 0:
@@ -166,18 +147,53 @@ class QbDockingStation(object):
         elif dxl_error != 0:
             print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
 
+    # Enable Dynamixel torq
+    def enable(self):
+        # Enable Dynamixel Torque
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE, self.TORQUE_ENABLE)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
+        # Enable Dynamixel LED
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_LED, self.LED_ENABLE)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
 
+
+    # Denit relay controller class
     def deinit(self):
         # Disable the motor
         self.disable()
         # Close port
         self.portHandler.closePort()
-        print("[INFO][GEN] Dynamixel has been successfully disconnected")
+        if(self.VERBOSE): print("[INFO][GEN] Dynamixel has been successfully disconnected")
 
 
+    # Reboot Dynamixel HW and reset all HW errors
+    def reboot(self):
+        # Disable Dynamixel 
+        self.disable()
+        if(self.VERBOSE): print("[INFO][GEN] - Rebooting Dynamixel...")
+        # Reboot Dynamixel to clear all errors
+        dxl_comm_result, dxl_error = self.packetHandler.reboot(self.portHandler, self.DXL_ID)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("[ERROR][GEN] - %s" % self.packetHandler.getRxPacketError(dxl_error))
+        else:
+            if(self.VERBOSE): print("[ERROR][INFO] - Dynamixel has been successfully rebooted")
+        # Renable Dynamixel 
+        time.sleep(0.5) # give some time for the servo to reboot
+        if(self.VERBOSE): print("[INFO][GEN] - Rebooting Done.")
+        self.enable()
+
+    # Change motor control mode
     def change_control_mode(self, _control_mode):
         # Disable Dynamixel Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_DISABLE)
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE, self.TORQUE_DISABLE)
         if dxl_comm_result != COMM_SUCCESS:
             print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
             return False
@@ -194,7 +210,7 @@ class QbDockingStation(object):
             return False
 
         # Enable Dynamixel Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_ENABLE)
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_TORQUE, self.TORQUE_ENABLE)
         if dxl_comm_result != COMM_SUCCESS:
             print("[ERROR][GEN] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
             return False
@@ -204,7 +220,7 @@ class QbDockingStation(object):
         return True
 
 
-    # Set Direction
+    # Set Motor Direction
     def set_direction(self, _direction):
         # Read Operation Mode register
         dxl_operation_mode, dxl_comm_result, dxl_error = self.packetHandler.read4ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_LOAD)
@@ -224,20 +240,22 @@ class QbDockingStation(object):
         else:
             return False
 
+
     def read_connection_status(self):
-        connection_voltage = False
-        print("[INFO][GEN] Connection status - bus voltage: %d (mV)" % (connection_voltage))
+        connection_voltage = self.power_sensor.read_bus_voltage()
+        if(self.VERBOSE): print("[INFO][GEN] Connection status - bus voltage: %d (mV)" % (connection_voltage))
         if(connection_voltage >= 5000):
             return True 
         else:
             return False
+
 
     # Calibration sequence
     def calibration_sequence(self):
         # Calibration State Machine
         if self.calibration_state == self.ST_CAL_INIT:
             # Set Control to PWM mode
-            print("[INFO][CAL] ST_CAL_INIT")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_INIT")
             if self.change_control_mode(self.PWM_CONTROL) == True:
                 self.calibration_state = self.ST_CAL_MOVE_UP
             else:
@@ -246,7 +264,7 @@ class QbDockingStation(object):
 
         elif self.calibration_state == self.ST_CAL_MOVE_UP:
             # Rotate motor CW
-            print("[INFO][CAL] ST_CAL_MOVE_UP")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_MOVE_UP")
             # Convert shigned short to signed int
             pwm_goal = pwm_goal = int.from_bytes((self.PWM_GOAL_MIN).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
@@ -261,7 +279,7 @@ class QbDockingStation(object):
 
         elif self.calibration_state == self.ST_CAL_CHECK_LOAD_MIN:
             # Check if the load is more than (+-)50%
-            print("[INFO][CAL] ST_CAL_CHECK_LOAD_MIN")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_CHECK_LOAD_MIN")
             dxl_present_load, dxl_comm_result, dxl_error = self.packetHandler.read2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_LOAD)
             # Convert shigned short to signed int
             dxl_present_load_signed = int.from_bytes((dxl_present_load).to_bytes(2, byteorder='big'), signed=True, byteorder='big')
@@ -273,14 +291,14 @@ class QbDockingStation(object):
                 self.calibration_state = self.ST_CAL_ERROR
             elif(dxl_present_load_signed >= self.LOAD_MIN and dxl_present_load_signed <= self.LOAD_MAX):
                 self.calibration_state = self.ST_CAL_CHECK_LOAD_MIN
-                print("[INFO][CAL][ST_CAL_CHECK_LOAD_MIN] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][CAL][ST_CAL_CHECK_LOAD_MIN] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
             else:
                 self.calibration_state = self.ST_CAL_STORE_MIN_BOUNDREY
-                print("[INFO][CAL][ST_CAL_CHECK_LOAD_MIN] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][CAL][ST_CAL_CHECK_LOAD_MIN] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
 
         elif self.calibration_state == self.ST_CAL_STORE_MIN_BOUNDREY:
             # If load detected, store current position as min boundrey
-            print("[INFO][CAL] ST_CAL_STORE_MIN_BOUNDREY")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_STORE_MIN_BOUNDREY")
             dxl_present_position, dxl_comm_result, dxl_error = self.packetHandler.read4ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_POSITION)
             dxl_present_position_signed = int.from_bytes((dxl_present_position).to_bytes(4, byteorder='big'), signed=True, byteorder='big')
             if dxl_comm_result != COMM_SUCCESS:
@@ -291,12 +309,12 @@ class QbDockingStation(object):
                 self.calibration_state = self.ST_CAL_ERROR
             else:
                 self.CAL_MIN_BOUNDREY = dxl_present_position_signed - 200
-                print("[INFO][CAL][ST_CAL_STORE_MIN_BOUNDREY] - CAL_MIN_BONDREY = %d" % (self.CAL_MIN_BOUNDREY))
+                if(self.VERBOSE): print("[INFO][CAL][ST_CAL_STORE_MIN_BOUNDREY] - CAL_MIN_BONDREY = %d" % (self.CAL_MIN_BOUNDREY))
                 self.calibration_state = self.ST_CAL_MOVE_DOWN
 
         elif self.calibration_state == self.ST_CAL_MOVE_DOWN:
             # Reverse motor rotation (CCW)
-            print("[INFO][CAL] ST_CAL_MOVE_DOWN")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_MOVE_DOWN")
             # Convert shigned short to signed int
             pwm_goal = int.from_bytes((self.PWM_GOAL_MAX).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
@@ -312,7 +330,7 @@ class QbDockingStation(object):
 
         elif self.calibration_state == self.ST_CAL_CHECK_LOAD_MAX:
             # Check if the load is more than (+-)50%
-            print("[INFO][CAL] ST_CAL_CHECK_LOAD_MAX")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_CHECK_LOAD_MAX")
             dxl_present_load, dxl_comm_result, dxl_error = self.packetHandler.read2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_LOAD)
             # Convert shigned short to signed int
             dxl_present_load_signed = int.from_bytes((dxl_present_load).to_bytes(2, byteorder='big'), signed=True, byteorder='big')
@@ -324,14 +342,14 @@ class QbDockingStation(object):
                 self.calibration_state = self.ST_CAL_ERROR
             elif(dxl_present_load_signed >= self.LOAD_MIN and dxl_present_load_signed <= self.LOAD_MAX):
                 self.calibration_state = self.ST_CAL_CHECK_LOAD_MAX
-                print("[INFO][CAL][ST_CAL_CHECK_LOAD_MAX] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][CAL][ST_CAL_CHECK_LOAD_MAX] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
             else:
                 self.calibration_state = self.ST_CAL_STORE_MAX_BOUNDREY
-                print("[INFO][CAL][ST_CAL_CHECK_LOAD_MAX] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][CAL][ST_CAL_CHECK_LOAD_MAX] - CAL_PRES_LOAD = %d" % (dxl_present_load_signed))
 
         elif self.calibration_state == self.ST_CAL_STORE_MAX_BOUNDREY:
             # If load detected, store current position as max boundrey
-            print("[INFO][CAL] ST_CAL_STORE_MAX_BOUNDREY")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_STORE_MAX_BOUNDREY")
             dxl_present_position, dxl_comm_result, dxl_error = self.packetHandler.read4ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_POSITION)
             dxl_present_position_signed = int.from_bytes((dxl_present_position).to_bytes(4, byteorder='big'), signed=True, byteorder='big')
             if dxl_comm_result != COMM_SUCCESS:
@@ -342,12 +360,12 @@ class QbDockingStation(object):
                 self.calibration_state = self.ST_CAL_ERROR
             else:
                 self.CAL_MAX_BOUNDREY = dxl_present_position_signed - 200
-                print("[INFO][CAL][ST_CAL_STORE_MAX_BOUNDREY] - CAL_MAX_BOUNDREY = %d" % (self.CAL_MAX_BOUNDREY))
+                if(self.VERBOSE): print("[INFO][CAL][ST_CAL_STORE_MAX_BOUNDREY] - CAL_MAX_BOUNDREY = %d" % (self.CAL_MAX_BOUNDREY))
                 self.calibration_state = self.ST_CAL_END_RETRACT
 
         elif self.calibration_state == self.ST_CAL_END_RETRACT:
             # Rotate motor CW
-            print("[INFO][CAL] ST_CAL_END_RETRACT")
+            if(self.VERBOSE): print("[INFO][CAL] ST_CAL_END_RETRACT")
             # Convert shigned short to signed int
             pwm_goal = pwm_goal = int.from_bytes((self.PWM_GOAL_MIN).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
@@ -360,28 +378,29 @@ class QbDockingStation(object):
             else:
                 # Delay with 1 second to give some time for the motor to move
                 time.sleep(1)
-                print("[INFO][CAL] ST_CAL_DONE")
+                if(self.VERBOSE): print("[INFO][CAL] ST_CAL_DONE")
                 self.calibration_state = self.ST_CAL_DONE
 
         elif self.calibration_state == self.ST_CAL_DONE:
-            #print("[INFO][CAL] ST_CAL_DONE")
+            #if(self.VERBOSE): print("[INFO][CAL] ST_CAL_DONE")
             self.disable()
 
         elif self.calibration_state == self.ST_CAL_ERROR:
-            #print("[INFO][CAL] ST_CAL_ERROR");
+            #if(self.VERBOSE): print("[INFO][CAL] ST_CAL_ERROR");
             self.disable()
 
         else:
             # If unknown state, go to error state
-            print("[INFO][CAL] DEFAULT")
+            if(self.VERBOSE): print("[INFO][CAL] DEFAULT")
             self.calibration_state = self.ST_CAL_ERROR
-        
+
+
     # Dock with robot
     def dock_connector(self):
         # Docking State Machine
         if self.docking_state == self.ST_DOC_INIT:
             # Set Control to PWM mode
-            print("[INFO][DOC] ST_DOC_INIT")
+            if(self.VERBOSE): print("[INFO][DOC] ST_DOC_INIT")
             if self.change_control_mode(self.PWM_CONTROL) == True:
                 self.docking_state = self.ST_DOC_MOVE
             else:
@@ -390,7 +409,7 @@ class QbDockingStation(object):
 
         elif self.docking_state == self.ST_DOC_MOVE:
             # Reverse motor rotation (CCW)
-            print("[INFO][DOC] ST_DOC_MOVE")
+            if(self.VERBOSE): print("[INFO][DOC] ST_DOC_MOVE")
             # Convert shigned short to signed int
             pwm_goal = int.from_bytes((self.PWM_GOAL_MAX).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
@@ -407,7 +426,7 @@ class QbDockingStation(object):
             # Read connection status
             connection_status = self.read_connection_status()
             # Check if the load is more than (+-)50%
-            print("[INFO][DOC] ST_DOC_CHECK_CONNECTION")
+            if(self.VERBOSE): print("[INFO][DOC] ST_DOC_CHECK_CONNECTION")
             dxl_present_load, dxl_comm_result, dxl_error = self.packetHandler.read2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_LOAD)
             # Convert shigned short to signed int
             dxl_present_load_signed = int.from_bytes((dxl_present_load).to_bytes(2, byteorder='big'), signed=True, byteorder='big')
@@ -417,16 +436,16 @@ class QbDockingStation(object):
             elif dxl_error != 0:
                 print("[ERROR][DOC][ST_DOC_CHECK_CONNECTION] - %s" % self.packetHandler.getRxPacketError(dxl_error))
                 self.docking_state = self.ST_DOC_ERROR
-            elif(dxl_present_load_signed >= self.LOAD_MIN and dxl_present_load_signed <= self.LOAD_MAX):
-                self.docking_state = self.ST_DOC_CHECK_CONNECTION
-                print("[INFO][DOC][ST_DOC_CHECK_CONNECTION] - DOC_PRES_LOAD = %d" % (dxl_present_load_signed))
             elif connection_status == True:
                 self.docking_state = self.ST_DOC_CONNECTED
-                print("[INFO][DOC][ST_DOC_CHECK_CONNECTION] - DOC_PRES_LOAD = %d" % (dxl_present_load_signed))
-                print("[INFO][DOC] ST_DOC_CONNECTED")
+                if(self.VERBOSE): print("[INFO][DOC][ST_DOC_CHECK_CONNECTION] - DOC_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][DOC] ST_DOC_CONNECTED")
+            elif(dxl_present_load_signed >= self.LOAD_MIN and dxl_present_load_signed <= self.LOAD_MAX):
+                self.docking_state = self.ST_DOC_CHECK_CONNECTION
+                if(self.VERBOSE): print("[INFO][DOC][ST_DOC_CHECK_CONNECTION] - DOC_PRES_LOAD = %d" % (dxl_present_load_signed))
             else:
                 self.docking_state = self.ST_DOC_END_RETRACT
-                print("[INFO][DOC][ST_DOC_CHECK_CONNECTION] - DOC_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][DOC][ST_DOC_CHECK_CONNECTION] - DOC_PRES_LOAD = %d" % (dxl_present_load_signed))
 
         elif self.docking_state == self.ST_DOC_CONNECTED:
             #print("[INFO][DOC] ST_DOC_CONNECTED")
@@ -434,9 +453,9 @@ class QbDockingStation(object):
 
         elif self.docking_state == self.ST_DOC_END_RETRACT:
             # Rotate motor CW
-            print("[INFO][DOC] ST_DOC_END_RETRACT")
+            if(self.VERBOSE): print("[INFO][DOC] ST_DOC_END_RETRACT")
             # Convert shigned short to signed int
-            pwm_goal = pwm_goal = int.from_bytes((self.PWM_GOAL_MIN).to_bytes(2, byteorder='big', signed=True), byteorder='big')
+            pwm_goal = int.from_bytes((self.PWM_GOAL_MIN).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
             if dxl_comm_result != COMM_SUCCESS:
                 print("[ERROR][DOC][ST_DOC_END_RETRACT] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
@@ -447,16 +466,25 @@ class QbDockingStation(object):
             else:
                 # Delay with 1 second to give some time for the motor to move
                 time.sleep(1)
-                print("[INFO][DOC] ST_DOC_FAILURE")
+                # Convert shigned short to signed int
+                pwm_goal = int.from_bytes((0).to_bytes(2, byteorder='big', signed=True), byteorder='big')
+                # Stop the servo. Set PWM to 0
+                dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
+                if(self.VERBOSE): print("[INFO][DOC] ST_DOC_FAILURE")
                 self.docking_state = self.ST_DOC_FAILURE
 
         elif self.docking_state == self.ST_DOC_FAILURE:
-            #print("[INFO][DOC] ST_DOC_FAILURE")
+            if(self.VERBOSE): print("[INFO][DOC] ST_DOC_FAILURE")
             self.disable()
+            self.docking_state = self.ST_DOC_INIT
 
         elif self.docking_state == self.ST_DOC_ERROR:
-            #print("[INFO][DOC] ST_DOC_ERROR")
+            if(self.VERBOSE): print("[INFO][DOC] ST_DOC_ERROR")
             self.disable()
+            self.docking_state = self.ST_DOC_INIT
+        
+        # return status
+        return self.docking_state
 
 
     # Undock from the robot
@@ -464,7 +492,7 @@ class QbDockingStation(object):
         # Undocking State Machine
         if self.undocking_state == self.ST_UNDOC_INIT:
             # Set Control to PWM mode
-            print("[INFO][UNDOC] ST_UNDOC_INIT")
+            if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_INIT")
             if self.change_control_mode(self.PWM_CONTROL) == True:
                 self.undocking_state = self.ST_UNDOC_MOVE
             else:
@@ -473,7 +501,7 @@ class QbDockingStation(object):
 
         elif self.undocking_state == self.ST_UNDOC_MOVE:
             # Reverse motor rotation (CW)
-            print("[INFO][UNDOC] ST_UNDOC_MOVE")
+            if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_MOVE")
             # Convert shigned short to signed int
             pwm_goal = int.from_bytes((self.PWM_GOAL_MIN).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
@@ -490,7 +518,7 @@ class QbDockingStation(object):
             # Read connection status
             connection_status = self.read_connection_status()
             # Check if the load is more than (+-)50%
-            print("[INFO][UNDOC] ST_UNDOC_CHECK_CONNECTION")
+            if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_CHECK_CONNECTION")
             dxl_present_load, dxl_comm_result, dxl_error = self.packetHandler.read2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_PRESENT_LOAD)
             # Convert shigned short to signed int
             dxl_present_load_signed = int.from_bytes((dxl_present_load).to_bytes(2, byteorder='big'), signed=True, byteorder='big')
@@ -502,24 +530,40 @@ class QbDockingStation(object):
                 self.undocking_state = self.ST_UNDOC_ERROR
             elif(dxl_present_load_signed >= self.LOAD_MIN and dxl_present_load_signed <= self.LOAD_MAX):
                 self.undocking_state = self.ST_UNDOC_CHECK_CONNECTION
-                print("[INFO][UNDOC][ST_UNDOC_CHECK_CONNECTION] - UNDOC_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][UNDOC][ST_UNDOC_CHECK_CONNECTION] - UNDOC_PRES_LOAD = %d" % (dxl_present_load_signed))
             elif connection_status == False:
+                if(self.VERBOSE): print("[INFO][UNDOC][ST_UNDOC_CHECK_CONNECTION] - UNDOC_PRES_LOAD = %d" % (dxl_present_load_signed))
+                # Convert shigned short to signed int
+                pwm_goal = int.from_bytes((self.PWM_GOAL_MAX).to_bytes(2, byteorder='big', signed=True), byteorder='big')
+                dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
+                if dxl_comm_result != COMM_SUCCESS:
+                    print("[ERROR][UNDOC][ST_UNDOC_DISCONNECTED] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+                    self.undocking_state = self.ST_UNDOC_ERROR
+                elif dxl_error != 0:
+                    print("[ERROR][UNDOC][ST_UNDOC_DISCONNECTED] - %s" % self.packetHandler.getRxPacketError(dxl_error))
+                    self.undocking_state = self.ST_UNDOC_ERROR
+                else:
+                    # Delay with 0.5 second to give some time for the motor to move
+                    time.sleep(1)
+                    # Convert shigned short to signed int
+                    pwm_goal = int.from_bytes((0).to_bytes(2, byteorder='big', signed=True), byteorder='big')
+                    # Stop the servo. Set PWM to 0
+                    dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
                 self.undocking_state = self.ST_UNDOC_DISCONNECTED
-                print("[INFO][UNDOC][ST_UNDOC_CHECK_CONNECTION] - UNDOC_PRES_LOAD = %d" % (dxl_present_load_signed))
-                print("[INFO][UNDOC] ST_UNDOC_DISCONNECTED")
             else:
                 self.undocking_state = self.ST_UNDOC_END_RETRACT
-                print("[INFO][UNDOC][ST_UNDOC_CHECK_CONNECTION] - UNDOC_PRES_LOAD = %d" % (dxl_present_load_signed))
+                if(self.VERBOSE): print("[INFO][UNDOC][ST_UNDOC_CHECK_CONNECTION] - UNDOC_PRES_LOAD = %d" % (dxl_present_load_signed))
 
         elif self.undocking_state == self.ST_UNDOC_DISCONNECTED:
-            #print("[INFO][UNDOC] ST_UNDOC_DISCONNECTED")
+            if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_DISCONNECTED")
             self.disable()
+            self.undocking_state = self.ST_UNDOC_INIT
 
         elif self.undocking_state == self.ST_UNDOC_END_RETRACT:
             # Rotate motor CCW
-            print("[INFO][UNDOC] ST_UNDOC_END_RETRACT")
+            if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_END_RETRACT")
             # Convert shigned short to signed int
-            pwm_goal = pwm_goal = int.from_bytes((self.PWM_GOAL_MAX).to_bytes(2, byteorder='big', signed=True), byteorder='big')
+            pwm_goal = int.from_bytes((self.PWM_GOAL_MIN).to_bytes(2, byteorder='big', signed=True), byteorder='big')
             dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
             if dxl_comm_result != COMM_SUCCESS:
                 print("[ERROR][UNDOC][ST_UNDOC_END_RETRACT] - %s" % self.packetHandler.getTxRxResult(dxl_comm_result))
@@ -530,23 +574,31 @@ class QbDockingStation(object):
             else:
                 # Delay with 0.5 second to give some time for the motor to move
                 time.sleep(0.5)
-                print("[INFO][UNDOC] ST_UNDOC_FAILURE")
+                # Convert shigned short to signed int
+                pwm_goal = int.from_bytes((0).to_bytes(2, byteorder='big', signed=True), byteorder='big')
+                # Stop the servo. Set PWM to 0
+                dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, self.DXL_ID, self.ADDR_GOAL_PWM, pwm_goal)
+                if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_FAILURE")
                 self.undocking_state = self.ST_UNDOC_FAILURE
 
         elif self.undocking_state == self.ST_UNDOC_FAILURE:
-            #print("[INFO][UNDOC] ST_UNDOC_FAILURE")
+            #if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_FAILURE")
             self.disable()
 
         elif self.undocking_state == self.ST_UNDOC_ERROR:
-            #print("[INFO][UNDOC] ST_UNDOC_ERROR")
+            #if(self.VERBOSE): print("[INFO][UNDOC] ST_UNDOC_ERROR")
             self.disable()
+        
+        # return status
+        return self.undocking_state
+    
 
 
     # Main loop handler
     def main_loop(self):
         # Main control, handle startup and error handling
         while (1):
-            self.undock_connector()
+            self.dock_connector()
             time.sleep(0.01)
     
 

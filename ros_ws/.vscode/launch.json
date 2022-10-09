@@ -1,0 +1,11 @@
+{
+    "configurations": [
+        {
+            "name": "ROS: Launch",
+            "type": "ros",
+            "request": "launch",
+            "target": "/home/ubuntu/qb-docking-station/ros_ws/src/qb_docking_station/launch/qb_docking_station.launch",
+            "stopOnEntry": true
+        }
+    ]
+}
